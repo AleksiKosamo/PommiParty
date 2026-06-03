@@ -8,18 +8,7 @@ echo ==========================================
 echo.
 
 :: Automatic desktop shortcut creation
-powershell -NoProfile -Command ^
-    "$Desktop = [System.Environment]::GetFolderPath('Desktop'); ^
-     $Lnk = Join-Path $Desktop 'PommiPeli.lnk'; ^
-     if (-not (Test-Path $Lnk)) { ^
-         $WshShell = New-Object -ComObject WScript.Shell; ^
-         $S = $WshShell.CreateShortcut($Lnk); ^
-         $S.TargetPath = '%~dp0Start_PommiParty.bat'; ^
-         $S.WorkingDirectory = '%~dp0'; ^
-         $S.IconLocation = '%~dp0game_icon.ico'; ^
-         $S.Save(); ^
-         Write-Host 'Luotiin tyopoytapikakuvake PommiPeli!'; ^
-     }"
+powershell -NoProfile -Command "$Desktop = [System.Environment]::GetFolderPath('Desktop'); $Lnk = Join-Path $Desktop 'PommiPeli.lnk'; if (-not (Test-Path $Lnk)) { $WshShell = New-Object -ComObject WScript.Shell; $S = $WshShell.CreateShortcut($Lnk); $S.TargetPath = '%~dp0Start_PommiParty.bat'; $S.WorkingDirectory = '%~dp0'; $S.IconLocation = '%~dp0game_icon.ico'; $S.Save(); Write-Host 'Luotiin tyopoytapikakuvake PommiPeli!'; }"
 
 echo Kaynnistetaan palvelin ja asiakasohjelma...
 
