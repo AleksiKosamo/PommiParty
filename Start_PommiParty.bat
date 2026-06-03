@@ -6,10 +6,24 @@ echo ==========================================
 echo   KAYNNISTETAAN POMMIPARTY
 echo ==========================================
 echo.
+
+:: Automatic desktop shortcut creation
+powershell -NoProfile -Command ^
+    "$Desktop = [System.Environment]::GetFolderPath('Desktop'); ^
+     $Lnk = Join-Path $Desktop 'PommiPeli.lnk'; ^
+     if (-not (Test-Path $Lnk)) { ^
+         $WshShell = New-Object -ComObject WScript.Shell; ^
+         $S = $WshShell.CreateShortcut($Lnk); ^
+         $S.TargetPath = '%~dp0Start_PommiParty.bat'; ^
+         $S.WorkingDirectory = '%~dp0'; ^
+         $S.IconLocation = '%~dp0game_icon.ico'; ^
+         $S.Save(); ^
+         Write-Host 'Luotiin tyopoytapikakuvake PommiPeli!'; ^
+     }"
+
 echo Kaynnistetaan palvelin ja asiakasohjelma...
 
 :: Start the npm run dev command in a separate window or in the background
-:: We use start cmd /k so it stays open or run in background
 start "" cmd /c "npm run dev"
 
 echo Odotetaan 4 sekuntia, jotta palvelimet ehtivat kaynnistya...
