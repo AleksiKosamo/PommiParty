@@ -8,6 +8,8 @@ import { loadDictionary } from './dictionary';
 import { logger } from './logger';
 import { loadRankings, getLeaderboard, getTopSoloRankings, updateSoloScore } from './leaderboard';
 import { EVENTS, Difficulty, LeaderboardEntry } from './types';
+import { GAME_CONFIG, SOCKET_CONFIG, ENV_CONFIG } from './config';
+import { sanitizeUsername } from './utils/stringUtils';
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────
 
@@ -20,10 +22,10 @@ app.get('/leaderboard', (_req, res) => res.json(getLeaderboard()));
 
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: { origin: '*', methods: ['GET', 'POST'] },
+  cors: { origin: SOCKET_CONFIG.CORS_ORIGIN, methods: SOCKET_CONFIG.CORS_METHODS },
 });
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? 'admin';
-if (process.env.NODE_ENV === 'production' && ADMIN_PASSWORD === 'admin') {
+const ADMIN_PASSWORD = ENV_CONFIG.ADMIN_PASSWORD;
+if (ENV_CONFIG.NODE_ENV === 'production' && ADMIN_PASSWORD === 'admin') {
   logger.error(
     'ADMIN_PASSWORD is unset or uses the default in production. Set ADMIN_PASSWORD env var.'
   );
@@ -40,9 +42,9 @@ const multiplayerRooms = new Map<string, GameRoom>();
 const soloRooms = new Map<string, SoloRoom>();
 
 function generateCode(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = '';
-  for (let i = 0; i < 4; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  for (let i = 0; i < GAME_CONFIG.ROOM_CODE_LENGTH; i++)
+    code += GAME_CONFIG.ROOM_CODE_CHARSET[Math.floor(Math.random() * GAME_CONFIG.ROOM_CODE_CHARSET.length)];
   return code;
 }
 
@@ -52,23 +54,8 @@ function makeUniqueCode(): string {
   return code;
 }
 
-const bannedUsernameFragments = [
-  'vittu',
-  'saatana',
-  'paska',
-  'perse',
-  'kusi',
-  'mulkk',
-  'kakka',
-  'natsi',
-  'rasisti',
-];
-function sanitizeUsername(input: string): string | null {
-  const username = input.trim().slice(0, 20);
-  if (!username) return null;
-  const normalized = username.toLowerCase();
-  if (bannedUsernameFragments.some((fragment) => normalized.includes(fragment))) return null;
-  return username;
+function validateUsername(input: string): string | null {
+  return sanitizeUsername(input, GAME_CONFIG.MAX_USERNAME_LENGTH, GAME_CONFIG.BANNED_USERNAME_FRAGMENTS);
 }
 
 function createMultiplayerRoom(code: string, isRanked = false): GameRoom {
@@ -159,7 +146,7 @@ io.on('connection', (socket) => {
   socket.on(
     EVENTS.CREATE_ROOM,
     ({ username, isRanked }: { username: string; isRanked?: boolean }) => {
-      const safeUsername = sanitizeUsername(username);
+      const safeUsername = validateUsername(username);
       if (!safeUsername) {
         socket.emit(EVENTS.ERROR, { message: 'Nimimerkki ei ole sallittu.' });
         return;
@@ -179,7 +166,7 @@ io.on('connection', (socket) => {
   );
 
   socket.on(EVENTS.JOIN_ROOM, ({ roomCode, username }: { roomCode: string; username: string }) => {
-    const safeUsername = sanitizeUsername(username);
+    const safeUsername = validateUsername(username);
     if (!safeUsername) {
       socket.emit(EVENTS.ERROR, { message: 'Nimimerkki ei ole sallittu.' });
       return;

@@ -1,4 +1,5 @@
 import { logger } from './logger';
+import { AUDIO_CONFIG } from './config';
 
 class AudioManager {
   private ctx: AudioContext | null = null;
@@ -14,12 +15,16 @@ class AudioManager {
     return this.ctx;
   }
 
+  setMuted(muted: boolean) {
+    this.muted = muted;
+  }
+
   toggleMute() {
     this.muted = !this.muted;
     return this.muted;
   }
 
-  private playTone(freq: number, type: OscillatorType, duration: number, vol = 0.1) {
+  private playTone(freq: number, type: OscillatorType, duration: number, vol = AUDIO_CONFIG.DEFAULT_VOLUME) {
     if (this.muted) return;
     try {
       const ctx = this.getCtx();
@@ -44,26 +49,26 @@ class AudioManager {
 
   playTick(urgent: boolean) {
     if (urgent) {
-      this.playTone(800, 'square', 0.05, 0.05);
+      this.playTone(AUDIO_CONFIG.TICK_URGENT_FREQ, 'square', AUDIO_CONFIG.TONE_DURATION_SHORT, 0.05);
     } else {
-      this.playTone(400, 'sine', 0.1, 0.05);
+      this.playTone(AUDIO_CONFIG.TICK_NORMAL_FREQ, 'sine', AUDIO_CONFIG.TONE_DURATION_MEDIUM, 0.05);
     }
   }
 
   playAccept() {
-    this.playTone(600, 'sine', 0.1, 0.1);
-    setTimeout(() => this.playTone(800, 'sine', 0.2, 0.1), 100);
+    this.playTone(AUDIO_CONFIG.ACCEPT_FREQ_1, 'sine', AUDIO_CONFIG.TONE_DURATION_MEDIUM, AUDIO_CONFIG.DEFAULT_VOLUME);
+    setTimeout(() => this.playTone(AUDIO_CONFIG.ACCEPT_FREQ_2, 'sine', AUDIO_CONFIG.TONE_DURATION_LONG, AUDIO_CONFIG.DEFAULT_VOLUME), 100);
   }
 
   playReject() {
-    this.playTone(150, 'sawtooth', 0.3, 0.1);
+    this.playTone(AUDIO_CONFIG.REJECT_FREQ, 'sawtooth', AUDIO_CONFIG.TONE_DURATION_LONG, AUDIO_CONFIG.DEFAULT_VOLUME);
   }
 
   playExplosion() {
     if (this.muted) return;
     try {
       const ctx = this.getCtx();
-      const duration = 1.5;
+      const duration = AUDIO_CONFIG.TONE_DURATION_LONG * 5;
       const bufferSize = ctx.sampleRate * duration;
       const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
       const data = buffer.getChannelData(0);

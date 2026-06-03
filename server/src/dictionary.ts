@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { logger } from './logger';
+import { DICTIONARY_CONFIG } from './config';
 
 let wordSet: Set<string>;
 const wiktCache = new Map<string, boolean>();
@@ -29,7 +30,7 @@ export async function loadDictionary(): Promise<void> {
     // Generate dynamic syllables
     const counts = new Map<string, number>();
     for (const w of words) {
-      if (w.length < 3) continue;
+      if (w.length < DICTIONARY_CONFIG.MIN_WORD_LENGTH_FOR_SYLLABLES) continue;
       for (const len of [2, 3]) {
         for (let i = 0; i <= w.length - len; i++) {
           const sub = w.substring(i, i + len);
@@ -41,17 +42,17 @@ export async function loadDictionary(): Promise<void> {
     }
 
     const sorted = [...counts.entries()]
-      .filter(([, count]) => count >= 5)
+      .filter(([, count]) => count >= DICTIONARY_CONFIG.MIN_SYLLABLE_OCCURRENCES)
       .sort((a, b) => b[1] - a[1]);
 
     // Split into separate lists by length
     twoLetterSyllables = sorted
       .filter(([s]) => s.length === 2)
-      .slice(0, 100)
+      .slice(0, DICTIONARY_CONFIG.MAX_2LETTER_SYLLABLES)
       .map((x) => x[0]);
     threeLetterSyllables = sorted
       .filter(([s]) => s.length === 3)
-      .slice(0, 80)
+      .slice(0, DICTIONARY_CONFIG.MAX_3LETTER_SYLLABLES)
       .map((x) => x[0]);
     commonSyllables = [...twoLetterSyllables, ...threeLetterSyllables];
   } catch (err) {
@@ -60,7 +61,7 @@ export async function loadDictionary(): Promise<void> {
   }
 
   if (commonSyllables.length === 0) {
-    twoLetterSyllables = ['ka', 'ta', 'sa', 'la'];
+    twoLetterSyllables = DICTIONARY_CONFIG.DEFAULT_SYLLABLES;
     commonSyllables = twoLetterSyllables;
   }
 

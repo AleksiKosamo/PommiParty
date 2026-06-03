@@ -2,6 +2,8 @@ import { SoloState } from '../types';
 import Bomb from './Bomb';
 import WordInput from './WordInput';
 import { audio } from '../audio';
+import { storage } from '../utils/storage';
+import { DIFFICULTY_CONFIG } from '../config';
 import { useState } from 'react';
 
 interface Props {
@@ -24,19 +26,11 @@ export default function SoloBoard({
   onBack,
 }: Props) {
   const isGameOver = state.phase === 'GAMEOVER';
-  const [isMuted, setIsMuted] = useState(audio.muted);
+  const [isMuted, setIsMuted] = useState(storage.getAudioMuted());
 
-  const diffName = {
-    EASY: 'Helppo',
-    NORMAL: 'Normaali',
-    HARD: 'Vaikea',
-  }[state.difficulty];
+  const diffName = DIFFICULTY_CONFIG[state.difficulty].name;
 
-  const maxMs = {
-    EASY: 30_000,
-    NORMAL: 20_000,
-    HARD: 10_000,
-  }[state.difficulty];
+  const maxMs = DIFFICULTY_CONFIG[state.difficulty].startMs;
 
   if (isGameOver) {
     return (
@@ -100,7 +94,12 @@ export default function SoloBoard({
         <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'baseline' }}>
           <button
             className="btn-link"
-            onClick={() => setIsMuted(audio.toggleMute())}
+            onClick={() => {
+              const newMuted = !isMuted;
+              setIsMuted(newMuted);
+              audio.setMuted(newMuted);
+              storage.setAudioMuted(newMuted);
+            }}
             style={{
               fontSize: '1.2rem',
               padding: '0',

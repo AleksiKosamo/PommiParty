@@ -6,14 +6,7 @@ import {
   getRandomSyllable,
   getWeightedRandomSyllable,
 } from './dictionary';
-
-type DifficultyConfig = { startMs: number; bonusMs: number };
-
-const DIFFICULTY_SETTINGS: Record<Difficulty, DifficultyConfig> = {
-  EASY: { startMs: 30_000, bonusMs: 5_000 },
-  NORMAL: { startMs: 20_000, bonusMs: 3_500 },
-  HARD: { startMs: 10_000, bonusMs: 2_000 },
-};
+import { DIFFICULTY_SETTINGS } from './config';
 
 type SoloEvents = {
   state_update: [SoloState];

@@ -2,6 +2,10 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { socket } from './socket';
 import { logger } from './logger';
 import { audio } from './audio';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { storage } from './utils/storage';
+import { setupGlobalErrorHandlers } from './utils/errorHandler';
+import { UI_CONFIG } from './config';
 import {
   SoloState,
   Difficulty,
@@ -14,7 +18,7 @@ import SoloBoard from './components/SoloBoard';
 
 type ViewMode = 'LOBBY' | 'SOLO' | 'ADMIN';
 
-export default function App() {
+function AppContent() {
   const [viewMode, setViewMode] = useState<ViewMode>('LOBBY');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<
@@ -29,7 +33,9 @@ export default function App() {
   const soloStateRef = useRef<SoloState | null>(null);
 
   // Leaderboard
-  const [leaderboardDifficulty, setLeaderboardDifficulty] = useState<Difficulty>('NORMAL');
+  const [leaderboardDifficulty, setLeaderboardDifficulty] = useState<Difficulty>(
+    storage.getLastDifficulty()
+  );
   const [soloLeaderboard, setSoloLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [adminAuthorized, setAdminAuthorized] = useState(false);
 
@@ -39,6 +45,7 @@ export default function App() {
 
   // ── Connect & wire up socket events ──────────────────────────────────
   useEffect(() => {
+    setupGlobalErrorHandlers();
     socket.connect();
 
     socket.on(EVENTS.SOLO_LEADERBOARD_DATA, (data: LeaderboardEntry[]) => {
@@ -58,7 +65,10 @@ export default function App() {
     socket.on('connect_error', (err: Error) => {
       setConnectionStatus('disconnected');
       logger.error('Socket connect error:', err);
-      setErrorMsg('Yhteyden muodostaminen epäonnistui.');
+      const message = err.message.includes('auth')
+        ? 'Todennusvirhe. Tarkista yhteysasetukset.'
+        : 'Yhteyden muodostaminen epäonnistui. Yritetään uudelleen...';
+      setErrorMsg(message);
     });
 
     socket.on('reconnect_attempt', () => {
@@ -72,7 +82,7 @@ export default function App() {
 
     socket.on(EVENTS.ERROR, ({ message }: { message: string }) => {
       setErrorMsg(message);
-      setTimeout(() => setErrorMsg(null), 3000);
+      setTimeout(() => setErrorMsg(null), UI_CONFIG.ERROR_MESSAGE_DURATION_MS);
     });
 
     // Solo events
@@ -144,6 +154,11 @@ export default function App() {
     }
   }, [connectionStatus, leaderboardDifficulty, requestSoloLeaderboard]);
 
+  // Save difficulty preference
+  useEffect(() => {
+    storage.setLastDifficulty(leaderboardDifficulty);
+  }, [leaderboardDifficulty]);
+
   // ── Hidden admin shortcut: press Shift and write admin ───────────────────
   useEffect(() => {
     const SECRET = 'admin';
@@ -194,6 +209,20 @@ export default function App() {
       if (resetTimer) clearTimeout(resetTimer);
     };
   }, []);
+
+  // ── Escape key handler for global navigation ─────────────────────────────
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (viewMode === 'SOLO' || viewMode === 'ADMIN') {
+          window.location.reload(); // Reset to lobby
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [viewMode]);
 
   // ── Actions ─────────────────────────────────────────────────────────
   const serverUrl = (import.meta as unknown as any).env?.VITE_SERVER_URL ?? '';
@@ -302,4 +331,12 @@ export default function App() {
   }
 
   return null;
+}
+
+export default function App() {
+  return (
+    <ErrorBoundary>
+      <AppContent />
+    </ErrorBoundary>
+  );
 }
