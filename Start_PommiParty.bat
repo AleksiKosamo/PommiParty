@@ -1,6 +1,7 @@
 @echo off
 title PommiParty - Kaynnistetaan...
 cd /d "%~dp0"
+set "SCRIPTDIR=%~dp0"
 echo.
 echo ==========================================
 echo   KAYNNISTETAAN POMMIPARTY
@@ -8,7 +9,7 @@ echo ==========================================
 echo.
 
 :: Automatic desktop shortcut creation
-powershell -NoProfile -Command "$Desktop = [System.Environment]::GetFolderPath('Desktop'); $Lnk = Join-Path $Desktop 'PommiPeli.lnk'; if (-not (Test-Path $Lnk)) { $WshShell = New-Object -ComObject WScript.Shell; $S = $WshShell.CreateShortcut($Lnk); $S.TargetPath = '%~dp0Start_PommiParty.bat'; $S.WorkingDirectory = '%~dp0'; $S.IconLocation = '%~dp0game_icon.ico'; $S.Save(); Write-Host 'Luotiin tyopoytapikakuvake PommiPeli!'; }"
+powershell -NoProfile -Command "$Desktop = [System.Environment]::GetFolderPath('Desktop'); $Lnk = Join-Path $Desktop 'PommiPeli.lnk'; if (-not (Test-Path $Lnk)) { $WshShell = New-Object -ComObject WScript.Shell; $S = $WshShell.CreateShortcut($Lnk); $S.TargetPath = '%SCRIPTDIR%Start_PommiParty.bat'; $S.WorkingDirectory = '%SCRIPTDIR%'; $IconPath = '%SCRIPTDIR%game_icon.ico'; if (Test-Path $IconPath) { $S.IconLocation = $IconPath; }; $S.Save(); Write-Host 'Luotiin tyopoytapikakuvake PommiPeli!'; }"
 
 echo Kaynnistetaan palvelin ja asiakasohjelma...
 
