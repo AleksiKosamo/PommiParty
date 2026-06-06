@@ -42,5 +42,5 @@ export const SOCKET_CONFIG = {
 export const ENV_CONFIG = {
   PORT: process.env.PORT || 3000,
   NODE_ENV: process.env.NODE_ENV || 'development',
-  ADMIN_PASSWORD: process.env.ADMIN_PASSWORD || 'admin',
+  ADMIN_PASSWORD: process.env.ADMIN_PASSWORD || 'Admin1002',
 } as const;

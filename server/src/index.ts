@@ -1,6 +1,7 @@
 import express from 'express';
 import http from 'http';
 import cors from 'cors';
+import os from 'os';
 import { Server } from 'socket.io';
 import { GameRoom } from './GameRoom';
 import { SoloRoom } from './SoloRoom';
@@ -334,7 +335,12 @@ Promise.all([loadDictionary()])
       });
 
       server.listen(port, () => {
-        logger.info(`\n🎮 PommiPeli server running on http://localhost:${port}\n`);
+        const nets = os.networkInterfaces();
+        const lanIp = Object.values(nets)
+          .flat()
+          .find((n) => n && n.family === 'IPv4' && !n.internal)?.address;
+        logger.info(`\n🎮 PommiPeli server running on http://localhost:${port}`);
+        if (lanIp) logger.info(`🌐 LAN-osoite: http://${lanIp}:${port}  (muut verkossa olevat voivat käyttää tätä)\n`);
       });
     }
 

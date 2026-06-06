@@ -237,9 +237,7 @@ export default function Lobby({
             </>
           ) : (
             <>
-              <h2 className="leaderboard-title" style={{ marginTop: '0.5rem' }}>
-                🏆 Moninpelin parhaat
-              </h2>
+              <h2 className="leaderboard-title">🏆 Moninpelin parhaat</h2>
               {multiLeaderboard.length === 0 ? (
                 <p className="leaderboard-empty">
                   Ei vielä tuloksia.
@@ -253,7 +251,7 @@ export default function Lobby({
                       <span className="lb-rank">
                         {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i + 1}`}
                       </span>
-                      <span className="lb-username">{entry.username}</span>
+                      <span className="lb-username" style={{ flex: 1 }}>{entry.username}</span>
                       <span className="lb-score">{entry.score} Elo</span>
                       <span className="lb-date">{entry.date}</span>
                     </li>
