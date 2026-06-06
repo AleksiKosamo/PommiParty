@@ -7,16 +7,23 @@ import { storage } from './utils/storage';
 import { setupGlobalErrorHandlers } from './utils/errorHandler';
 import { UI_CONFIG } from './config';
 import {
+  GameState,
   SoloState,
   Difficulty,
   LeaderboardEntry,
+  GameOverPayload,
+  WordAcceptedPayload,
   EVENTS,
 } from './types';
 import Lobby from './components/Lobby';
 import AdminPanel from './components/AdminPanel';
 import SoloBoard from './components/SoloBoard';
+import RoomLobby from './components/RoomLobby';
+import GameBoard from './components/GameBoard';
+import GameOver from './components/GameOver';
+import RoundEnd from './components/RoundEnd';
 
-type ViewMode = 'LOBBY' | 'SOLO' | 'ADMIN';
+type ViewMode = 'LOBBY' | 'SOLO' | 'ADMIN' | 'GAME';
 
 function AppContent() {
   const [viewMode, setViewMode] = useState<ViewMode>('LOBBY');
@@ -25,22 +32,47 @@ function AppContent() {
     'connecting' | 'connected' | 'disconnected'
   >('connecting');
 
-  // Game/Solo states
+  // Rejection/Acceptance visual highlights
   const [rejection, setRejection] = useState<string | null>(null);
   const [accepted, setAccepted] = useState<string | null>(null);
   const [timerMs, setTimerMs] = useState<number>(0);
+
+  // Solo state
   const [soloState, setSoloState] = useState<SoloState | null>(null);
   const soloStateRef = useRef<SoloState | null>(null);
 
-  // Leaderboard
+  // Multiplayer state
+  const [gameState, setGameState] = useState<GameState | null>(null);
+  const [gameOverData, setGameOverData] = useState<GameOverPayload | null>(null);
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const [loserId, setLoserId] = useState<string | null>(null);
+  const [typingUpdates, setTypingUpdates] = useState<Record<string, string>>({});
+
+  // Leaderboards
   const [leaderboardDifficulty, setLeaderboardDifficulty] = useState<Difficulty>(
     storage.getLastDifficulty()
   );
   const [soloLeaderboard, setSoloLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [multiLeaderboard, setMultiLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [adminAuthorized, setAdminAuthorized] = useState(false);
 
   const requestSoloLeaderboard = useCallback((difficulty: Difficulty) => {
     socket.emit(EVENTS.GET_SOLO_LEADERBOARD, { difficulty });
+  }, []);
+
+  const requestMultiLeaderboard = useCallback(() => {
+    socket.emit(EVENTS.GET_LEADERBOARD);
+  }, []);
+
+  const leaveRoom = useCallback(() => {
+    socket.disconnect();
+    socket.connect();
+    setViewMode('LOBBY');
+    setGameState(null);
+    setGameOverData(null);
+    setCountdown(null);
+    setLoserId(null);
+    setTypingUpdates({});
   }, []);
 
   // ── Connect & wire up socket events ──────────────────────────────────
@@ -50,6 +82,10 @@ function AppContent() {
 
     socket.on(EVENTS.SOLO_LEADERBOARD_DATA, (data: LeaderboardEntry[]) => {
       setSoloLeaderboard(data);
+    });
+
+    socket.on(EVENTS.LEADERBOARD_DATA, (data: LeaderboardEntry[]) => {
+      setMultiLeaderboard(data);
     });
 
     socket.on('connect', () => {
@@ -85,7 +121,7 @@ function AppContent() {
       setTimeout(() => setErrorMsg(null), UI_CONFIG.ERROR_MESSAGE_DURATION_MS);
     });
 
-    // Solo events
+    // ── Solo event listeners ───────────────────────────────────────────
     socket.on(EVENTS.SOLO_STATE, (state: SoloState) => {
       setSoloState(state);
       soloStateRef.current = state;
@@ -129,6 +165,60 @@ function AppContent() {
       }
     );
 
+    // ── Multiplayer event listeners ────────────────────────────────────
+    socket.on(EVENTS.GAME_STATE, (state: GameState) => {
+      setGameState(state);
+      if (state.phase === 'IN_ROUND' || state.phase === 'ROUND_END') {
+        setCountdown(null);
+        setGameOverData(null);
+      }
+      setViewMode('GAME');
+    });
+
+    socket.on(EVENTS.WORD_ACCEPTED, ({ word }: WordAcceptedPayload) => {
+      audio.playAccept();
+      setAccepted(word);
+      setRejection(null);
+      setTimeout(() => setAccepted(null), 1000);
+      setTypingUpdates({}); // Clear all typing visual cues
+    });
+
+    socket.on(EVENTS.WORD_REJECTED, ({ reason }: { reason: string }) => {
+      audio.playReject();
+      setRejection(reason);
+      setTimeout(() => setRejection(null), 2500);
+    });
+
+    socket.on(EVENTS.BOMB_EXPLODED, ({ loserId }: { loserId: string }) => {
+      audio.playExplosion();
+      setLoserId(loserId);
+      document.body.classList.add('screen-shake');
+      setTimeout(() => document.body.classList.remove('screen-shake'), 400);
+    });
+
+    socket.on(EVENTS.GAME_OVER, (data: GameOverPayload) => {
+      setGameOverData(data);
+    });
+
+    socket.on(EVENTS.TIMER_UPDATE, ({ remaining }: { remaining: number }) => {
+      setTimerMs(remaining);
+    });
+
+    socket.on(EVENTS.STARTING_COUNTDOWN, ({ count }: { count: number }) => {
+      setCountdown(count);
+    });
+
+    socket.on(EVENTS.TYPING_UPDATE, ({ playerId, word }: { playerId: string; word: string }) => {
+      setTypingUpdates((prev) => ({ ...prev, [playerId]: word }));
+    });
+
+    socket.on(EVENTS.KICKED, ({ reason }: { reason: string }) => {
+      setErrorMsg(reason);
+      setViewMode('LOBBY');
+      setGameState(null);
+      setGameOverData(null);
+    });
+
     return () => {
       socket.off('connect');
       socket.off('disconnect');
@@ -137,6 +227,7 @@ function AppContent() {
       socket.off(EVENTS.ERROR);
       socket.off(EVENTS.ADMIN_AUTHORIZED);
       socket.off(EVENTS.SOLO_LEADERBOARD_DATA);
+      socket.off(EVENTS.LEADERBOARD_DATA);
 
       socket.off(EVENTS.SOLO_STATE);
       socket.off(EVENTS.SOLO_TIMER_UPDATE);
@@ -144,9 +235,19 @@ function AppContent() {
       socket.off(EVENTS.SOLO_WORD_REJECTED);
       socket.off(EVENTS.SOLO_GAMEOVER);
 
+      socket.off(EVENTS.GAME_STATE);
+      socket.off(EVENTS.WORD_ACCEPTED);
+      socket.off(EVENTS.WORD_REJECTED);
+      socket.off(EVENTS.BOMB_EXPLODED);
+      socket.off(EVENTS.GAME_OVER);
+      socket.off(EVENTS.TIMER_UPDATE);
+      socket.off(EVENTS.STARTING_COUNTDOWN);
+      socket.off(EVENTS.TYPING_UPDATE);
+      socket.off(EVENTS.KICKED);
+
       socket.disconnect();
     };
-  }, []);
+  }, [leaderboardDifficulty, requestSoloLeaderboard]);
 
   useEffect(() => {
     if (connectionStatus === 'connected') {
@@ -185,7 +286,9 @@ function AppContent() {
 
         // Reset the idle timer
         if (resetTimer) clearTimeout(resetTimer);
-        resetTimer = setTimeout(() => { buffer = ''; }, 3000);
+        resetTimer = setTimeout(() => {
+          buffer = '';
+        }, 3000);
 
         if (buffer === SECRET) {
           const shiftPressedRecently = Date.now() - lastShiftTime < 5000;
@@ -214,15 +317,15 @@ function AppContent() {
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (viewMode === 'SOLO' || viewMode === 'ADMIN') {
-          window.location.reload(); // Reset to lobby
+        if (viewMode === 'SOLO' || viewMode === 'ADMIN' || viewMode === 'GAME') {
+          leaveRoom();
         }
       }
     };
 
     window.addEventListener('keydown', handleEscape);
     return () => window.removeEventListener('keydown', handleEscape);
-  }, [viewMode]);
+  }, [viewMode, leaveRoom]);
 
   // ── Actions ─────────────────────────────────────────────────────────
   const serverUrl = (import.meta as unknown as any).env?.VITE_SERVER_URL ?? '';
@@ -250,8 +353,28 @@ function AppContent() {
     setRejection(null);
   }, []);
 
-  const backToHome = useCallback(() => {
-    window.location.reload(); // Quick reset
+  const createRoom = useCallback((username: string, isRanked: boolean) => {
+    socket.emit(EVENTS.CREATE_ROOM, { username, isRanked });
+  }, []);
+
+  const joinRoom = useCallback((username: string, roomCode: string) => {
+    socket.emit(EVENTS.JOIN_ROOM, { username, roomCode });
+  }, []);
+
+  const startGame = useCallback(() => {
+    socket.emit(EVENTS.START_GAME);
+  }, []);
+
+  const submitWord = useCallback((word: string) => {
+    socket.emit(EVENTS.SUBMIT_WORD, { word });
+  }, []);
+
+  const giveUp = useCallback(() => {
+    socket.emit(EVENTS.GIVE_UP);
+  }, []);
+
+  const playAgain = useCallback(() => {
+    socket.emit(EVENTS.PLAY_AGAIN);
   }, []);
 
   // ── Render phase ─────────────────────────────────────────────────────
@@ -284,12 +407,12 @@ function AppContent() {
       <div>
         {statusHeader}
         <AdminPanel
-          gameState={null}
-          myId=""
+          gameState={gameState}
+          myId={socket.id || ''}
           adminAuthorized={adminAuthorized}
           onLogin={adminLogin}
           onLogout={adminLogout}
-          onKickPlayer={() => {}}
+          onKickPlayer={(targetId) => socket.emit(EVENTS.KICK_PLAYER, { targetId })}
           onBack={() => setViewMode('LOBBY')}
           errorMsg={errorMsg}
         />
@@ -307,7 +430,11 @@ function AppContent() {
           leaderboardDifficulty={leaderboardDifficulty}
           onChangeLeaderboardDifficulty={setLeaderboardDifficulty}
           soloLeaderboard={soloLeaderboard}
+          multiLeaderboard={multiLeaderboard}
           serverUrlHint={serverUrl}
+          onCreateRoom={createRoom}
+          onJoinRoom={joinRoom}
+          onRequestMultiLeaderboard={requestMultiLeaderboard}
         />
       </div>
     );
@@ -324,8 +451,64 @@ function AppContent() {
           accepted={accepted}
           onSubmitWord={submitSoloWord}
           onRestart={restartSolo}
-          onBack={backToHome}
+          onBack={leaveRoom}
         />
+      </div>
+    );
+  }
+
+  if (viewMode === 'GAME' && gameState) {
+    // 1. If phase is GAME_OVER, show GameOver screen
+    if (gameState.phase === 'GAME_OVER' && gameOverData) {
+      const myPlayer = gameState.players.find((p) => p.id === socket.id);
+      return (
+        <div>
+          {statusHeader}
+          <GameOver
+            gameState={gameState}
+            myId={socket.id || ''}
+            gameOverData={gameOverData}
+            onPlayAgain={playAgain}
+            isHost={myPlayer?.isHost ?? false}
+            onBack={leaveRoom}
+          />
+        </div>
+      );
+    }
+
+    // 2. If phase is LOBBY or STARTING, show RoomLobby screen
+    if (gameState.phase === 'LOBBY' || gameState.phase === 'STARTING') {
+      return (
+        <div>
+          {statusHeader}
+          <RoomLobby
+            gameState={gameState}
+            myId={socket.id || ''}
+            countdown={countdown}
+            onStartGame={startGame}
+            onLeave={leaveRoom}
+          />
+        </div>
+      );
+    }
+
+    // 3. Otherwise (IN_ROUND or ROUND_END), show GameBoard screen
+    // We also overlay RoundEnd if phase is ROUND_END and we have a loser
+    const loser = gameState.players.find((p) => p.id === loserId);
+    return (
+      <div>
+        {statusHeader}
+        <GameBoard
+          gameState={gameState}
+          myId={socket.id || ''}
+          timerMs={timerMs}
+          rejection={rejection}
+          accepted={accepted}
+          onSubmitWord={submitWord}
+          onGiveUp={giveUp}
+          typingUpdates={typingUpdates}
+        />
+        {gameState.phase === 'ROUND_END' && loser && <RoundEnd loserName={loser.username} />}
       </div>
     );
   }

@@ -61,7 +61,7 @@ export async function loadDictionary(): Promise<void> {
   }
 
   if (commonSyllables.length === 0) {
-    twoLetterSyllables = DICTIONARY_CONFIG.DEFAULT_SYLLABLES;
+    twoLetterSyllables = [...DICTIONARY_CONFIG.DEFAULT_SYLLABLES];
     commonSyllables = twoLetterSyllables;
   }
 

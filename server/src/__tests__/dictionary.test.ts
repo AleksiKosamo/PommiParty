@@ -2,7 +2,11 @@
  * Unit tests for dictionary utilities
  */
 
-import { containsSyllable, isInLocalList, getRandomSyllable } from '../src/dictionary';
+import { containsSyllable, isInLocalList, getRandomSyllable, loadDictionary } from '../dictionary';
+
+beforeAll(async () => {
+  await loadDictionary();
+});
 
 describe('Dictionary Functions', () => {
   describe('containsSyllable', () => {

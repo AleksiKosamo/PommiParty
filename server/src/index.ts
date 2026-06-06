@@ -111,6 +111,10 @@ io.on('connection', (socket) => {
     socket.emit(EVENTS.SOLO_LEADERBOARD_DATA, getTopSoloRankings(difficulty));
   });
 
+  socket.on(EVENTS.GET_LEADERBOARD, () => {
+    socket.emit(EVENTS.LEADERBOARD_DATA, getLeaderboard());
+  });
+
   socket.on(
     EVENTS.SUBMIT_SOLO_SCORE,
     ({
